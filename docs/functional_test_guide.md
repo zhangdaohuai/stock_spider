@@ -426,3 +426,237 @@ conda run -n agent python tests/functional_test_case/poc_akshare_quick.py
 | 15 | 15分钟 | 30 | 30分钟 |
 | 60 | 60分钟 | 101 | 日线 |
 | 102 | 周线 | 103 | 月线 |
+
+---
+
+## 8. 浏览器爬取验证脚本（DrissionPage / Playwright）
+
+### 8.1 环境准备
+
+#### 安装DrissionPage
+
+```bash
+pip install DrissionPage
+```
+
+当前已安装版本：DrissionPage 4.1.1.2
+
+#### 安装Playwright（XHR拦截脚本需要）
+
+```bash
+pip install playwright
+playwright install chromium
+```
+
+当前已安装版本：Playwright 1.52.0
+
+#### 代理问题
+
+浏览器爬取脚本**不需要**清除代理环境变量，因为浏览器会自动处理网络连接。但如果系统代理导致浏览器无法访问东方财富，可临时关闭代理。
+
+### 8.2 DrissionPage基础验证 — `poc_drissionpage_basic.py`
+
+**目的**：验证DrissionPage能否正常启动浏览器、访问东方财富页面并提取数据。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_drissionpage_basic.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 验证目标 |
+|------|--------|---------|
+| 1 | 安装验证 | DrissionPage版本号、核心模块导入 |
+| 2 | 无头启动 | Chrome无头模式启动 |
+| 3 | 页面访问 | 访问东方财富行情页 |
+| 4 | 元素提取 | 股票名称、价格等基本元素 |
+| 5 | 表格提取 | 页面中的数据表格 |
+
+**预期输出**：
+
+```
+验证结果汇总
+  安装验证: 通过
+  无头启动: 通过
+  页面访问: 通过
+  元素提取: 通过
+  表格提取: 通过
+  总计: 5/5 项通过
+```
+
+### 8.3 行情页浏览器爬取 — `poc_em_browser_quote.py`
+
+**目的**：使用DrissionPage浏览器模式爬取行情主页数据，替代被IP封锁的push2 API。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_em_browser_quote.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 说明 |
+|------|--------|------|
+| 0 | 页面结构探索 | 统计Canvas/SVG/Table/IFrame数量 |
+| 1 | 实时行情 | 提取股票名称、价格、涨跌幅 |
+| 2 | K线数据 | 检测K线渲染方式（Canvas/表格） |
+| 3 | 分时线 | 检测分时线渲染方式 |
+| 4 | 五档盘口 | 提取买卖五档数据 |
+| 5 | 资金流向 | 提取主力/大单/中单/小单净流入 |
+
+**关键发现**：
+- K线和分时线使用Canvas绘制，无法直接从DOM提取
+- 资金流向数据可通过JS从表格提取
+- 实时行情在交易时段可从DOM提取，盘后显示"-"
+
+### 8.4 数据中心浏览器爬取 — `poc_em_browser_datacenter.py`
+
+**目的**：使用DrissionPage浏览器模式爬取数据中心9个模块的表格数据。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_em_browser_datacenter.py
+```
+
+**测试项一览**：
+
+| 编号 | 模块 | URL | 表格列数 |
+|------|------|-----|---------|
+| 1 | 龙虎榜 | data.eastmoney.com/stock/lhb/ | 4列 |
+| 2 | 融资融券 | data.eastmoney.com/rzrq/ | 21列 |
+| 3 | 大宗交易 | data.eastmoney.com/dzjy/ | 10列 |
+| 4 | 股权质押 | data.eastmoney.com/gpzy/ | 8列 |
+| 5 | 股东分析 | data.eastmoney.com/gdfx/ | 16列 |
+| 6 | 业绩报表 | data.eastmoney.com/bbsj/ | 18列 |
+| 7 | 分红送配 | data.eastmoney.com/yjfp/ | 21列 |
+| 8 | 沪深港通 | data.eastmoney.com/hsgt/ | 22列 |
+| 9 | 研究报告 | data.eastmoney.com/report/ | 17列 |
+
+**关键特性**：
+- 每个模块自动提取表头和前3行数据
+- 支持搜索筛选（输入股票代码"603288"）
+- 自动检测翻页组件
+- 模块间间隔3秒避免请求过快
+
+**注意**：此脚本运行时间较长（约3-5分钟），因为需要依次访问9个页面。
+
+### 8.5 F10档案浏览器爬取 — `poc_em_browser_f10.py`
+
+**目的**：使用DrissionPage浏览器模式爬取F10档案页面，解决部分API返回非JSON的问题。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_em_browser_f10.py
+```
+
+**测试项一览**：
+
+| 编号 | 标签 | API状态 | 浏览器模式 |
+|------|------|---------|-----------|
+| 1 | 公司概况 | ✅ API可用 | ✅ 浏览器可提取 |
+| 2 | 经营分析 | ✅ API可用 | ✅ 浏览器可提取 |
+| 3 | 核心题材 | ❌ API非JSON | ✅ 浏览器可提取 |
+| 4 | 股本结构 | ❌ API非JSON | ✅ 浏览器可提取 |
+| 5 | 公司大事 | ❌ API非JSON | ⚠️ 部分可提取 |
+| 6 | 财务分析 | ✅ API可用 | ✅ 浏览器可提取 |
+| 7 | 资本运作 | ✅ API可用 | ✅ 浏览器可提取 |
+| 8 | 关联个股 | ❌ API非JSON | ✅ 浏览器可提取 |
+| 9 | 股东研究 | ⚠️ API空数据 | ✅ 浏览器可提取 |
+
+**关键发现**：
+- 之前API失败的4个接口中，3个可通过浏览器模式成功提取
+- 股本结构数据完整：包含股份流通受限表、流通股份分布情况表
+- 融资融券个股级数据可通过F10页面获取（51行历史数据）
+
+### 8.6 XHR请求拦截 — `poc_em_xhr_intercept.py`
+
+**目的**：使用Playwright拦截浏览器XHR请求，发现隐藏的API端点。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_em_xhr_intercept.py
+```
+
+**测试项一览**：
+
+| 编号 | 场景 | 拦截域名 | 结果 |
+|------|------|---------|------|
+| 1 | 龙虎榜 | datacenter-web.eastmoney.com | 0个请求（页面URL已变更） |
+| 2 | 行情页 | push2/push2his.eastmoney.com | 20个请求 |
+| 3 | F10档案 | emweb.securities.eastmoney.com | 217个请求 |
+
+**行情页发现的API端点**：
+
+| 端点路径 | 请求次数 | 说明 |
+|---------|---------|------|
+| /api/qt/stock/get | 6 | 实时行情 |
+| /api/qt/stock/kline/get | 1 | K线数据 |
+| /api/qt/stock/trends2/sse | 2 | 分时线 |
+| /api/qt/stock/details/get | 1 | 盘口明细 |
+| /api/qt/stock/fflow/kline/get | 1 | 资金流向 |
+| /api/qt/clist/get | 1 | 股票列表 |
+| /api/qt/slist/get | 3 | 排行列表 |
+| /api/qt/pkyd/get | 2 | 盘口异动 |
+| /api/qt/kamt/get | 1 | 沪深港通资金 |
+| /api/qt/ulist/get | 1 | 涨停列表 |
+
+**注意**：此脚本运行时间较长（约2-3分钟），需要启动Playwright浏览器。
+
+### 8.7 故障排查（浏览器爬取）
+
+#### Chrome启动失败
+
+**现象**：`ChromiumPage` 创建失败或超时
+
+**解决方案**：
+1. 确保系统已安装Chrome或Chromium浏览器
+2. 检查Chrome版本是否与DrissionPage兼容
+3. 尝试不使用无头模式：去掉 `co.headless()` 调用
+
+#### 页面加载超时
+
+**现象**：`page.get()` 长时间无响应
+
+**解决方案**：
+1. 增加等待时间：`time.sleep(5)` 后再提取数据
+2. 检查网络连接
+3. 尝试使用 `page.wait.doc_loaded(timeout=30)`
+
+#### 元素定位失败
+
+**现象**：`page.ele()` 返回None或抛出异常
+
+**解决方案**：
+1. 使用多种选择器策略：CSS、XPath、文本定位
+2. 增加等待时间让动态内容加载完成
+3. 使用 `page.wait.eles_loaded()` 等待元素出现
+
+#### DrissionPage v4.x API变更
+
+| v3.x用法 | v4.x用法 |
+|---------|---------|
+| `co.set_headless(True)` | `co.headless()` |
+| `page.wait.ele_loaded()` | `page.wait.doc_loaded()` |
+| `page.wait(timeout=10)` | `page.wait.doc_loaded(timeout=10)` |
+
+---
+
+## 9. 推荐运行顺序（含浏览器爬取）
+
+```
+步骤1: poc_drissionpage_basic.py           (基础验证，约30秒)
+步骤2: poc_baostock.py                     (无IP封锁风险，约30秒)
+步骤3: poc_em_browser_datacenter.py        (数据中心9模块，约3-5分钟)
+步骤4: poc_em_browser_f10.py               (F10档案9标签，约3-5分钟)
+步骤5: 等待5分钟
+步骤6: poc_em_browser_quote.py             (行情主页，约2分钟)
+步骤7: poc_em_xhr_intercept.py             (XHR拦截，约2-3分钟)
+步骤8: poc_eastmoney.py                    (API验证，约15秒)
+步骤9: poc_akshare_quick.py                (AkShare快速验证，约45秒)
+```
