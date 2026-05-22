@@ -1,0 +1,10 @@
+{
+    "host": "localhost",
+    "port": 5432,
+    "database": "stock_spider",
+    "user": "zhangdaohuai",
+    "password_env": "DB_PASSWORD",
+    "db_version": "001",
+    "pool_min": 2,
+    "pool_max": 10
+}

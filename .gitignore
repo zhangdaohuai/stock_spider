@@ -214,3 +214,7 @@ storage/
 
 #Used to store environment configuration information such as for browsers, as well as cache
 data/
+
+
+# 用于存储股票数据的本地目录 不能上传到 git 仓库
+stock_data/

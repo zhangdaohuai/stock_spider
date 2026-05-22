@@ -660,3 +660,251 @@ python tests/functional_test_case/poc_em_xhr_intercept.py
 步骤8: poc_eastmoney.py                    (API验证，约15秒)
 步骤9: poc_akshare_quick.py                (AkShare快速验证，约45秒)
 ```
+
+---
+
+## 10. 同花顺数据源验证脚本
+
+### 10.1 环境准备
+
+#### 安装依赖
+
+```bash
+pip install thsdk pywencai 'mootdx[all]' pytdx
+```
+
+#### 创建mootdx配置目录
+
+```bash
+mkdir -p ~/.mootdx
+```
+
+### 10.2 JSONP API端点探测 — `poc_ths_jsonp_api.py`
+
+**目的**：全量探测同花顺d.10jqka.com.cn的JSONP API端点可用性。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_ths_jsonp_api.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 验证目标 |
+|------|--------|---------|
+| 1 | 分钟线(1/5/15/30/60分钟) | 各周期分钟线按年获取 |
+| 2 | 实时行情 | 个股实时价格数据 |
+| 3 | 个股详情 | 个股基本面信息 |
+| 4 | 行情排行 | 全A股涨跌排行 |
+| 5 | 概念/行业板块 | 板块列表和排名 |
+| 6 | 问财接口 | 自然语言查询 |
+| 7 | 资金流向/大单追踪 | 资金数据 |
+| 8 | 分时数据(v6) | v6版API分时线 |
+| 9 | K线(日/周/月) | 标准K线数据 |
+| 10 | 龙虎榜 | 龙虎榜数据 |
+
+**关键发现**：
+- v2 API period code与社区流传映射不同：30=5分钟, 40=30分钟, 50=60分钟
+- v6 API period=60 可获取1分钟线
+- 实时行情和日K线稳定可用
+- 问财、龙虎榜、大单追踪等接口需认证
+
+### 10.3 分钟线深度验证 — `poc_ths_minute_line.py`
+
+**目的**：深度验证同花顺分钟线数据格式、历史覆盖范围、反爬策略。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_ths_minute_line.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 验证目标 |
+|------|--------|---------|
+| 1 | 分钟线历史覆盖 | 2020-2026年各周期数据可用性 |
+| 2 | 数据格式解析 | CSV字段解析和含义 |
+| 3 | 多股票对比 | 不同股票分钟线差异 |
+| 4 | 实时行情 | 实时行情数据提取 |
+| 5 | 反爬策略检测 | Referer/UA/高频/问财/qd接口 |
+| 6 | v6版API | v6版端点可用性 |
+
+### 10.4 Period Code诊断 — `poc_ths_period_diagnosis.py`
+
+**目的**：暴力测试v2/v6 API所有period code，确定正确的映射关系。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_ths_period_diagnosis.py
+```
+
+**关键输出**：
+
+```
+v2 API有效period code:
+  00/01/02: 日K线(243条)
+  10/11/12: 周K线(53条)
+  20/21/22: 月K线(12条)
+  30: 5分钟线(5664条) - 不稳定
+  40/41/42: 30分钟线(1944条)
+  50/51/52: 60分钟线(972条)
+  70/71/72: 日K线datetime(243条)
+  80/81/82: 年K线(1条)
+  90/91/92: 季K线(4条)
+
+v6 API:
+  period=01: 日K线(total=5919)
+  period=60: 1分钟线(total=11207)
+```
+
+**注意**：此脚本运行时间较长（约3-5分钟），因为需要测试100个period code。
+
+### 10.5 v6 API历史范围验证 — `poc_ths_v6_history.py`
+
+**目的**：验证v6 API 1分钟线的按年获取能力和历史范围。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_ths_v6_history.py
+```
+
+**关键发现**：
+
+| API | Period | 数据类型 | 2020 | 2024 | 2025 | 2026 |
+|-----|--------|---------|------|------|------|------|
+| v6 | 60 | 1分钟线 | ❌ | ❌ | ❌ | ✅(11207条) |
+| v2 | 40 | 30分钟线 | - | ✅ | ✅ | ✅ |
+| v2 | 50 | 60分钟线 | - | ✅ | ✅ | ✅ |
+
+### 10.6 THSDK验证 — `poc_thsdk.py`
+
+**目的**：验证THSDK（同花顺C库Python封装）的安装和功能。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_thsdk.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 游客模式结果 |
+|------|--------|------------|
+| 1 | 安装验证 | ✅ v1.7.18 |
+| 2 | 连接验证 | ✅ 游客模式可用 |
+| 3 | 分钟K线 | ❌ "not data" |
+| 4 | 日内分时 | ⚠️ 部分成功 |
+| 5 | 历史分时快照 | ❌ "not data" |
+| 6 | 实时行情 | ❌ 无quote属性 |
+
+**注意**：游客模式限制严重，分钟线数据需正式账号。
+
+### 10.7 pywencai验证 — `poc_pywencai.py`
+
+**目的**：验证pywencai（同花顺问财）的自然语言选股功能。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_pywencai.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 结果 |
+|------|--------|------|
+| 1 | 安装验证 | ✅ v0.13.1 |
+| 2 | 基础查询(市盈率/个股/涨幅) | ✅ 全部成功 |
+| 3 | Cookie认证需求 | ✅ 无Cookie可用 |
+| 4 | 条件选股(涨停/换手/破净/ROE) | ✅ 全部成功 |
+
+**注意**：pywencai不支持分钟线数据，仅用于选股和基本面数据。
+
+### 10.8 mootdx分钟线验证 — `poc_mootdx_minute.py`
+
+**目的**：验证mootdx（通达信协议）获取分钟线数据的能力。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_mootdx_minute.py
+```
+
+**测试项一览**：
+
+| 编号 | 测试项 | 结果 | 历史深度 |
+|------|--------|------|---------|
+| 1 | 1分钟线 | ✅ | 仅5天 |
+| 2 | 5分钟线 | ✅ | 约1个月 |
+| 3 | 15/30/60分钟线 | ✅ | 更深 |
+| 4 | 历史分时 | ❌ | API参数错误 |
+| 5 | 1分钟线历史深度 | ✅ | offset>800后数据重复 |
+| 6 | 多股票对比 | ✅ | 3只均成功 |
+
+### 10.9 pytdx分钟线验证 — `poc_pytdx_minute.py`
+
+**目的**：验证pytdx获取分钟线数据的能力（原始pytdx库）。
+
+**运行命令**：
+
+```bash
+python tests/functional_test_case/poc_pytdx_minute.py
+```
+
+**注意**：pytdx原始服务器地址可能已失效，建议优先使用mootdx。
+
+### 10.10 故障排查（同花顺）
+
+#### THSDK "not data"错误
+
+**现象**：所有分钟K线返回"not data"
+
+**原因**：游客模式权限不足
+
+**解决方案**：
+1. 使用正式同花顺账号：`THS({'username': 'xxx', 'password': 'xxx'})`
+2. 在交易时段（9:30-15:00）运行
+
+#### pywencai Node.js警告
+
+**现象**：`DeprecationWarning: The 'punycode' module is deprecated`
+
+**原因**：pywencai依赖Node.js执行JS，Node.js版本过新
+
+**解决方案**：忽略此警告，不影响功能
+
+#### mootdx PermissionError
+
+**现象**：`PermissionError: [Errno 1] Operation not permitted: '/Users/xxx/.mootdx'`
+
+**解决方案**：
+```bash
+mkdir -p ~/.mootdx
+```
+
+#### 同花顺API 404错误
+
+**现象**：部分period code或年份返回404
+
+**原因**：
+1. period code不正确（参考10.4节诊断结果）
+2. 该年份无数据（如v6 1分钟线仅当年可用）
+3. API不稳定（如v2 period=30）
+
+---
+
+## 11. 推荐运行顺序（含同花顺）
+
+```
+步骤1: poc_ths_jsonp_api.py               (JSONP API探测，约2分钟)
+步骤2: poc_ths_period_diagnosis.py         (Period Code诊断，约3-5分钟)
+步骤3: poc_ths_v6_history.py               (v6历史范围，约1分钟)
+步骤4: poc_ths_minute_line.py              (分钟线深度验证，约2分钟)
+步骤5: poc_thsdk.py                        (THSDK验证，约30秒)
+步骤6: poc_pywencai.py                     (问财验证，约1分钟)
+步骤7: poc_mootdx_minute.py                (mootdx分钟线，约30秒)
+```

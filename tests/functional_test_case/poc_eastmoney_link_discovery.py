@@ -40,7 +40,6 @@ BLOCKED_DOMAINS: set[str] = {
     "acttg.eastmoney.com",
     "js1.eastmoney.com",
     "g.eastmoney.com",
-    "emdata.eastmoney.com",
 }
 
 # 广告/追踪/下载/登录等URL路径关键词黑名单
